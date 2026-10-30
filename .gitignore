@@ -1,0 +1,6 @@
+# Local-only test secrets. Never commit.
+test/.env.test
+*.env
+.env*
+node_modules/
+test/e2e/shots/

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ScamBusters Triage (panel harness, dev only)</title>
+  <link rel="stylesheet" href="../sidepanel/panel.css">
+  <style>body { max-width: 440px; margin: 0 auto; height: 100vh; border-left: 1px solid #888; border-right: 1px solid #888; }</style>
+  <script type="module" src="panel-harness.js"></script>
+</head>
+<body>
+  <header id="header" class="header"></header>
+  <nav id="tabbar" class="tabbar" role="tablist" aria-label="Sections"></nav>
+  <main id="main" class="main" role="tabpanel" tabindex="-1"></main>
+  <footer id="footer" class="footer" hidden></footer>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <div id="sheet-root"></div>
+</body>
+</html>
