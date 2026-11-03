@@ -184,9 +184,12 @@ function renderFooter() {
   if (!show) return;
   const g = submitGate(ctx);
   const label = ui.submitting ? 'Submitting…' : g.n ? `Submit to ScamBusters (${g.n})` : 'Submit site only';
+  // Native append() would render a null child as the text "null".
+  if (!g.ok && g.reason && g.reason !== 'Submitting…') {
+    f.append(h('div', { class: 'foothint', role: 'status' }, g.reason + ' ',
+      g.until ? h('span', { class: 'countdown', dataset: { until: String(g.until), prefix: '' } }, secsLeft(g.until) + 's') : null));
+  }
   f.append(
-    !g.ok && g.reason && g.reason !== 'Submitting…' ? h('div', { class: 'foothint', role: 'status' }, g.reason + ' ',
-      g.until ? h('span', { class: 'countdown', dataset: { until: String(g.until), prefix: '' } }, secsLeft(g.until) + 's') : null) : null,
     h('button', { type: 'button', class: 'btn primary wide', id: 'submit-btn', disabled: !g.ok, onclick: () => openSubmitSheet(ctx) }, label));
 }
 

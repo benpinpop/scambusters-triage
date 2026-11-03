@@ -6,13 +6,14 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const [, , P, MODS] = process.argv;
 const LIVE = process.argv.includes('--live');
 const require = createRequire(path.join(MODS, 'x.js'));
 const puppeteer = require('puppeteer-core');
-const OUT = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), 'shots');
+const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'shots');
 fs.mkdirSync(OUT, { recursive: true });
 
 const results = [];
