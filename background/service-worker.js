@@ -13,6 +13,9 @@ import { lookupWallet, testKey } from '../lib/providers/index.js';
 import { rdapLookup } from '../lib/intel/rdap.js';
 import { urlscanSearch, urlscanSubmit, urlscanResult } from '../lib/intel/urlscan.js';
 import { loadKeywords, scoreText } from '../lib/keywords.js';
+import { getAutofill, saveAutofill, resetAutofillProfile } from './autofill.js';
+import { matchAuthUrl, matchDepositUrl } from '../lib/autofill/urlmatch.js';
+import { siteTagOf } from '../lib/autofill/profile.js';
 
 // ------------------------------------------------------------------ setup
 
@@ -124,6 +127,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
   const st = await stateForTab(tab);
   setState(tabId, st);
   if (st.page.kind === 'ok' && st.scan.status === 'idle' && hasPanel(windowId)) maybeAutoRun(tabId, { onOpen: true, onSwitch: true });
+  if (st.page.kind === 'ok') scheduleAutofill(tabId);
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
@@ -161,7 +165,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   if (info.status === 'complete') {
     const st = await stateForTab(tab);
     setState(tabId, st); // push (page kind may have changed, e.g. navigated to chrome://)
-    if (st.page.kind === 'ok') maybeAutoRun(tabId, { onLoad: true });
+    if (st.page.kind === 'ok') { maybeAutoRun(tabId, { onLoad: true }); scheduleAutofill(tabId); }
+  } else if (info.url && tab.status === 'complete') {
+    scheduleAutofill(tabId); // single-page-app route change: no new load event
   }
 });
 
@@ -330,6 +336,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   });
 });
 
+// Late-rendered forms: the autofill content script asks for another pass when inputs appear.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id || !sender.tab || !msg || msg.type !== 'autofill/retry') return;
+  if (!hasPanel(sender.tab.windowId)) { sendResponse({ stop: true }); return; }
+  scheduleAutofill(sender.tab.id);
+  sendResponse({});
+});
+
 // ------------------------------------------------------------------ request router
 
 async function activeTabId(port) {
@@ -371,7 +385,7 @@ async function handle(port, type, p) {
       if (t) activeTab.set(win, t.id);
       const st = t ? await stateForTab(t) : blankState(-1, '');
       if (t) setState(t.id, st);
-      if (t && st.page.kind === 'ok') maybeAutoRun(t.id, { onOpen: true });
+      if (t && st.page.kind === 'ok') { maybeAutoRun(t.id, { onOpen: true }); scheduleAutofill(t.id); }
       return { state: publicState(st), settings: await getSettings(), keys: await keysStatus() };
     }
 
@@ -505,6 +519,30 @@ async function handle(port, type, p) {
       return {};
     }
 
+    case 'autofill/get':
+      return getAutofill();
+
+    case 'autofill/save':
+      return saveAutofill({ profile: p.profile, opts: p.opts });
+
+    case 'autofill/reset':
+      return resetAutofillProfile();
+
+    case 'autofill/fill': {
+      const st = await requireState(port);
+      return runAutofill(st.tabId, { manual: true });
+    }
+
+    case 'autofill/preview': {
+      const st = await requireState(port);
+      return runAutofill(st.tabId, { manual: true, dryRun: true });
+    }
+
+    case 'autofill/undo': {
+      const st = await requireState(port);
+      return undoAutofill(st.tabId);
+    }
+
     case 'settings/set': {
       const settings = await setSettings(p.patch || {});
       await pushSettings();
@@ -557,6 +595,108 @@ async function slotRun(tabId, get, set, job) {
     }));
     throw e;
   }
+}
+
+// ------------------------------------------------------------------ autofill
+
+const afTimers = new Map();
+
+/** Debounced automatic pass. runAutofill itself re-checks that a panel is open. */
+function scheduleAutofill(tabId) {
+  clearTimeout(afTimers.get(tabId));
+  afTimers.set(tabId, setTimeout(() => {
+    afTimers.delete(tabId);
+    runAutofill(tabId, {}).catch(() => {});
+  }, 400));
+}
+
+/**
+ * Fill sign-up/login fields in a tab. Automatic runs happen ONLY while this window's side panel
+ * is open and only on pages that match (URL pattern, or a visible password field when the DOM
+ * fallback is on). Manual runs (Fill now / Detect) skip the page-match test.
+ */
+async function runAutofill(tabId, { manual = false, dryRun = false } = {}) {
+  let tab;
+  try { tab = await chrome.tabs.get(tabId); } catch { throw new ServiceError('internal', 'That tab is gone.'); }
+  if (!manual && !hasPanel(tab.windowId)) return null;
+  const { profile, opts } = await getAutofill();
+  if (!manual && !opts.onLoad) return null;
+
+  const url = tab.url || '';
+  if (!manual && !/^https?:\/\//i.test(url)) return null; // also covers "no host access": the URL is hidden
+  const authMatch = url ? matchAuthUrl(url) : null;
+  const depMatch = url && opts.depositFill ? matchDepositUrl(url) : null;
+  const match = authMatch || (depMatch ? { kind: 'deposit', via: depMatch.via } : null);
+  const mode = manual ? 'force' : match ? 'url' : opts.domFallback ? 'dom' : null;
+  if (!mode) return null;
+
+  let hostname = '';
+  try { hostname = new URL(url).hostname; } catch { /* unknown */ }
+  const args = {
+    mode, dryRun, profile, highlight: opts.highlight, checkTerms: opts.checkTerms,
+    depositFill: opts.depositFill, deposit: !!depMatch,
+    siteTag: siteTagOf(hostname), flags: { siteTagEmail: opts.siteTagEmail, siteTagUsername: opts.siteTagUsername },
+    watch: !manual,
+  };
+  let results;
+  try {
+    await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['content/autofill.js'] });
+    results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: a => {
+        const api = globalThis.__sbAutofill;
+        if (!api) return null;
+        const r = api.run(a);
+        if (a.watch) api.watch();
+        return r;
+      },
+      args: [args],
+    });
+  } catch (e) {
+    const acc = accessError(e);
+    if (!manual) return null;
+    throw new ServiceError(acc ? 'no_access' : 'autofill_failed', acc ? acc.reason : `Autofill failed: ${e.message || e}`);
+  }
+
+  const frames = results.map(r => r.result).filter(Boolean);
+  const fields = frames.flatMap(f => (Array.isArray(f.fields) ? f.fields : [])).slice(0, 60)
+    .map(f => ({ kind: String(f.kind).slice(0, 20), label: String(f.label || '').slice(0, 40), status: String(f.status || ''), reason: String(f.reason || '').slice(0, 80) }));
+  const filledKinds = fields.filter(f => f.status === 'filled').map(f => f.kind);
+  const used = {};
+  for (const f of frames) Object.assign(used, f.used || {});
+  const terms = frames.reduce((n, f) => n + (Number(f.terms) || 0), 0);
+  const data = {
+    mode, urlKind: match ? match.kind : null, via: match ? match.via : null,
+    detected: frames.some(f => f.detected), deposit: !!depMatch || frames.some(f => f.deposit), fields, dryRun, terms, frames: frames.length, at: Date.now(),
+  };
+
+  // A quiet retry pass (nothing new filled) must not wipe the earlier "filled" summary.
+  const cur = await getState(tabId);
+  const keep = !manual && !filledKinds.length && cur && cur.autofill && cur.autofill.status === 'done' && !cur.autofill.data.dryRun;
+  if (!keep && (manual || fields.length || data.detected || match)) {
+    await mutate(tabId, s => { s.autofill = { status: 'done', data, at: data.at }; });
+  }
+  if (filledKinds.length && !dryRun) {
+    let siteUrl = url;
+    try { const u = new URL(url); siteUrl = u.origin + u.pathname; } catch { /* keep */ }
+    addLog({ type: 'autofill', status: 'filled', siteUrl, fields: filledKinds, ...(used.email ? { email: used.email } : {}), ...(used.username ? { username: used.username } : {}), ...(terms ? { terms } : {}) });
+  }
+  return data;
+}
+
+async function undoAutofill(tabId) {
+  let results;
+  try {
+    results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: () => (globalThis.__sbAutofill ? globalThis.__sbAutofill.undo() : null),
+    });
+  } catch (e) {
+    throw new ServiceError('autofill_failed', `Could not undo: ${e.message || e}`);
+  }
+  const restored = results.reduce((n, r) => n + ((r.result && r.result.restored) || 0), 0);
+  await mutate(tabId, s => { s.autofill = { status: 'idle' }; });
+  return { restored };
 }
 
 // ------------------------------------------------------------------ ScamBusters

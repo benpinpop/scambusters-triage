@@ -24,6 +24,7 @@ export function blankState(tabId, url = '') {
     keywords: { status: 'idle', highlighted: false },
     rdap: idle(),
     urlscan: { search: idle(), scan: idle() },
+    autofill: idle(),           // last autofill result for this tab (never contains the profile)
   };
 }
 

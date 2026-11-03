@@ -7,6 +7,7 @@ A Chrome side-panel extension for Intelligence for Good ScamBusters students. Op
 - **Look up on-chain activity** and public name labels for each wallet
 - **Score the page text** for scam language
 - **Show domain age** (RDAP) and URLScan results
+- **Fill sign-up and login forms** with a throwaway identity, so registering on a scam site takes one click
 
 No build step: plain ES modules and CSS.
 
@@ -55,7 +56,46 @@ A valid key lets you **check** sites. To **submit**, your student account must b
 3. **On-chain:** look up balances, volume, first and last activity, and name labels. Red labels (scam, phishing, sanctioned) are flagged on Overview.
 4. **Content:** run the keyword check. The score is a triage aid, not a verdict.
 5. **Submit:** use the button at the bottom to send the site, with the selected wallets, to ScamBusters.
-6. **Log:** every check and submission, with IDs you can copy or export.
+6. **Autofill:** see "Autofill" below.
+7. **Log:** every check, submission and autofill, with IDs you can copy or export.
+
+## Autofill
+
+The **Autofill** tab pre-fills sign-up and login forms so you can register on a scam site quickly.
+
+**Profile.** Editable, with **Reset to defaults**:
+
+| Field | Default |
+|---|---|
+| Username | `username1202` |
+| Email | `example@example.com` |
+| Password | `Password1*` |
+| Phone | `2025550123` |
+| Country | `United States of America` |
+| Deposit amount | `100` |
+
+**Extra fields** (empty by default, only filled if you set them): first and last name, birth date, street address, city, state, ZIP, and custom `label = value` lines that fill any field whose label, name or placeholder contains the label.
+
+**When it fills.** Automatically, but only while the side panel is open and the page looks like a sign-up or login page: the URL contains login, log-in, signin, signup, sign-up, register, registration, join, create-account and similar. With "Also detect forms without a sign-up URL" on (the default), any page with a visible password field also counts. It also catches forms that appear later (multi-step flows, pop-ups). Close the panel and nothing fills.
+
+**Deposit pages.** When the URL (deposit, top-up, add-funds, recharge) or a page heading says deposit, amount boxes get the deposit amount. It is raised to the field's minimum, written as `100.00` if the box shows decimals, and a starter `0` counts as empty. Withdrawal, address, wallet, quantity and card fields are never touched, and it never clicks Pay. Preset amount buttons and dropdowns are left to you.
+
+**Buttons on the "This page" card.** **Fill now** works on any page, **Detect fields** previews what would be filled without changing anything, and **Undo** restores the previous values.
+
+**Behavior toggles.**
+- Auto-fill on page load (on by default).
+- Detect forms without a sign-up URL (on).
+- Fill deposit amounts (on).
+- Tag the email per site, `example+shopx@example.com` (off). Later spam then traces back to the scam site. Some sites reject `+`.
+- Tag the username per site, `username1202shopx` (off).
+- Outline filled fields (on).
+- Tick "I agree to the terms" boxes (off). Marketing and newsletter boxes are never ticked.
+
+**What it will not do.** It never submits a form. It skips hidden or trap fields, fields that already contain text, footer newsletter boxes and fields outside the sign-up form. Suggestion-style dropdowns (a typed country box, say) are reported as "pick manually". Third-party iframes are never filled.
+
+Auto-fill on page load needs the same **Allow on all sites** permission as auto-scan. Without it, **Fill now** still works on the tab you opened the panel from. Every fill is recorded in the **Log** tab with the email and username used.
+
+The profile is stored in plain text in this browser, like your API keys. Use throwaway details only, never a real password.
 
 ## Supported chains
 
@@ -67,7 +107,8 @@ SOL addresses have no checksum, so they are marked **unverified**. EVM addresses
 
 ## Privacy and security
 
-- The extension only reads the page. Page content never leaves your browser.
+- Scanning only reads the page, and page content never leaves your browser. Autofill is the one feature that writes to a page: it sets values in sign-up and login fields, and nothing else.
+- Your autofill profile goes only into a tab that matched a sign-up or login page. It is never sent to a server, never written to the log (the password is never logged), and never put into third-party iframes.
 - Nothing is sent anywhere unless you click. The page URL goes to URLScan only when you click **Scan now** (unlisted by default). Wallet addresses go to block explorers only for lookups.
 - All page data is treated as hostile and rendered as plain text (no `innerHTML`).
 - Wallets are re-validated right before submit, so an invalid one can never be sent.
@@ -75,7 +116,8 @@ SOL addresses have no checksum, so they are marked **unverified**. EVM addresses
 
 ## Known limits
 
-- Auto-scan needs the optional all-sites permission.
+- Auto-scan and auto-fill on page load need the optional all-sites permission.
+- Autofill cannot drive custom (non-native) dropdowns or typed suggestion boxes, CAPTCHAs or verification codes; it leaves those to you.
 - Cross-origin iframes are not scanned unless that origin is accessible.
 - Volumes are sampled (first 200 to 2,000 transactions) and labelled as such. There is no USD conversion.
 - Domains whose TLD has no RDAP service (.io, .co, .me, .ru) show "no RDAP data".
@@ -85,13 +127,14 @@ SOL addresses have no checksum, so they are marked **unverified**. EVM addresses
 ## For developers
 
 ```
-npm test                          # validators, keywords, providers (mocked), content (jsdom)
+npm test                          # validators, keywords, providers (mocked), content and autofill (jsdom)
 node test/smoke/run-smoke.mjs     # live read-only provider calls; needs test/.env.test
 node test/e2e/run-e2e.mjs <thisDir> <dir containing node_modules/puppeteer-core>
 ```
 
 - `DESIGN.md` has the message protocol and data shapes.
-- `background/` is the service worker (all network calls, queueing, caching, per-tab state). `content/` is the read-only page scanner. `sidepanel/` is UI only. `lib/` holds validators, providers and keyword scoring.
+- `background/` is the service worker (all network calls, queueing, caching, per-tab state). `content/content.js` is the read-only page scanner; `content/autofill.js` is the only script that writes to pages. `sidepanel/` is UI only. `lib/` holds validators, providers and keyword scoring.
+- `test/autofill-fixture.html` is a sign-up form with traps (hidden fields, confirm password, country and dial-code selects, footer newsletter). The autofill content tests run against it under jsdom (set `SB_JSDOM_PATH`, as for the content test).
 - `test/fixture.html` is a fake scam page with valid addresses for every chain. Serve it (`npx http-server test`) and open it with the extension loaded.
 - `test/.env.test` holds your own Etherscan and Tronscan keys for live tests (`ETHERSCAN_API_KEY=…`, `TRONSCAN_API_KEY=…`). It is gitignored; never commit it.
 - Vendored code: `lib/vendor/noble-hashes/` is `@noble/hashes` 1.8.0 (MIT) with one import path changed so it loads without a bundler.

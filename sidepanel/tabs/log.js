@@ -32,6 +32,10 @@ export function renderLog(ctx) {
         e.submission_id ? h('div', { class: 'small' }, 'ID ', h('span', { class: 'mono' }, e.submission_id), ' ',
           h('button', { type: 'button', class: 'link', onclick: () => copyText(e.submission_id, 'Copied') }, 'copy')) : null,
         e.wallet_count != null ? h('div', { class: 'muted small' }, `${e.wallet_count} wallet(s)`) : null,
+        Array.isArray(e.fields) ? h('div', { class: 'muted small' }, 'Filled: ' + e.fields.join(', ') + (e.terms ? ` + ${e.terms} terms box(es)` : '')) : null,
+        e.email ? h('div', { class: 'small' }, 'Email ', h('span', { class: 'mono' }, String(e.email)), ' ',
+          h('button', { type: 'button', class: 'link', onclick: () => copyText(e.email, 'Copied') }, 'copy')) : null,
+        e.username ? h('div', { class: 'small' }, 'Username ', h('span', { class: 'mono' }, String(e.username))) : null,
         e.error ? h('div', { class: 'errtxt small' }, typeof e.error === 'string' ? e.error : (e.error.message || JSON.stringify(e.error))) : null);
     })));
 }
