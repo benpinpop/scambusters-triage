@@ -16,7 +16,7 @@ export function blankState(tabId, url = '') {
     scan: { status: 'idle' },
     wallets: [],
     rejected: [],
-    dismissed: [],              // wallet ids the user removed (not re-added by re-scans)
+    dismissed: [],              // wallet ids the user removed (not re-added by automatic scans; a manual Re-scan clears this)
     domainLoaded: false,        // true once wallets/dismissed were loaded from the per-domain store
     check: idle(),
     submit: idle(),
@@ -24,6 +24,7 @@ export function blankState(tabId, url = '') {
     keywords: { status: 'idle', highlighted: false },
     rdap: idle(),
     urlscan: { search: idle(), scan: idle() },
+    autofill: idle(),           // last autofill result for this tab (never contains the profile)
   };
 }
 

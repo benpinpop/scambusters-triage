@@ -14,8 +14,10 @@ scambusters-triage/
     settings.js                settings + API key storage (chrome.storage.local)
     scambusters.js             GET /api/check, POST /api/submit client + response mapping
     log.js                     submission/activity log (chrome.storage.local)
+    autofill.js                autofill profile + options storage (chrome.storage.local)
   content/
     content.js                 classic script, injected on demand. Reads DOM only.
+    autofill.js                classic script, injected on demand. The only script that writes to a page.
   sidepanel/
     panel.html  panel.css  panel.js  (+ panel modules)
   lib/
@@ -30,11 +32,14 @@ scambusters-triage/
       etherscan.js blockchain.js tronscan.js xrpl.js solana.js blockcypher.js
     intel/
       rdap.js urlscan.js       domain intel + URLScan clients
+    autofill/
+      urlmatch.js              matchAuthUrl(url) -> {kind:'signup'|'login', via} | null (pure)
+      profile.js               defaults, sanitizeProfile/Opts, custom-field parsing, siteTagOf (pure)
     keywords.js                CSV parser, text normalizer, scorer
     keys.js                    API key format checks
     vendor/noble-hashes/       @noble/hashes 1.8.0 (sha256, keccak_256), vendored
   data/crypto_scam_keywords.csv
-  test/                        node:test unit tests, fixture.html, smoke/ (live, gitignored keys)
+  test/                        node:test unit tests, fixture.html, autofill-fixture.html, smoke/ (live, gitignored keys)
 ```
 
 ## Trust boundaries
@@ -45,6 +50,12 @@ scambusters-triage/
   The worker calls these with `chrome.scripting.executeScript({ func, allFrames })`
   and gets per-frame return values. The only message the content script *sends*
   on its own is `content/mutation` (debounced MutationObserver result).
+- **Autofill content script** (`content/autofill.js`) is kept separate so `content.js` can stay
+  read-only. It exposes `globalThis.__sbAutofill = { run(args), undo(), watch(), stopWatch() }`.
+  It receives the profile only as an argument to `run()`, writes values into fields, and never
+  submits a form, reads cookies/storage or reports field contents. Non-top frames run only if
+  same-origin with the top frame (a cross-origin `window.top` access throws, which skips the frame).
+  The one message it sends on its own is `autofill/retry` (see Autofill below).
 - **Service worker** is the only code that talks to the network or reads keys.
   It validates every candidate address with `lib/validators` before it can enter
   a wallet list.
@@ -82,6 +93,46 @@ values (capped at 500 kB per frame).
 
 Content -> worker message: `{ type: 'content/mutation', result: <scan() result> }`.
 
+## Autofill
+
+Gating (all in `runAutofill`, service-worker.js): an automatic pass requires (1) a side panel open
+in the tab's window (`hasPanel`), (2) `opts.onLoad`, (3) an http(s) URL visible to the worker, and
+(4) a page match. Manual passes (Fill now / Detect fields) skip (2) to (4) and use `mode: 'force'`.
+
+Triggers: `tabs.onUpdated` complete, `tabs.onUpdated` with a URL change on a complete tab (SPA
+routes), `tabs.onActivated`, `panel/hello`, and `autofill/retry`. All go through a 400 ms
+per-tab debounce (`scheduleAutofill`).
+
+Page match: `matchAuthUrl` is token-based over path segments, a hash route, selected query
+parameters and a leading subdomain (so `/designing-your-home` does not match "sign in").
+`mode` passed to the content script: `url` (URL matched), `dom` (no URL match, `domFallback`
+on; the script fills only if it sees a visible password field or `autocomplete=username|new-password`),
+`force` (manual).
+
+Deposit pages: `matchDepositUrl` (also token-based; "depositary" does not match) counts as a page
+match, and the worker passes `deposit: true`. The content script also treats the page as a deposit
+page when the title or a visible h1-h3/legend says deposit / top up / add funds. Only then is a
+text/number input classified `amount` (name/label says amount, deposit, sum, funds, stake...; or a
+bare number input), never when the signals say withdraw, address, wallet, card, quantity, code etc.
+Amount fields are exempt from the password-form scoping. `formatAmount` raises the value to `min`,
+caps it at `max`, and uses two decimals if the placeholder/step shows them. Gated by `opts.depositFill`.
+
+Field classification (content script) precedence: skip types and newsletter/search/captcha/
+OTP/referral/honeypot signals, then custom labels, then `autocomplete` token, then input type,
+then name/id/placeholder/aria-label/label text. If a visible password field exists, only fields in
+that form or dialog are filled, so a footer newsletter box is left alone. Hidden fields, fields
+with existing text, and already-filled fields are skipped. Values are set through the native value
+setter followed by `input`, `change`, `blur` and `focusout` events so React/Vue see them.
+
+Late forms: after an automatic pass the script runs a MutationObserver. When inputs are added it
+sends `{ type: 'autofill/retry' }` (debounced, at most one per 3 s). The worker answers
+`{ stop: true }` when no panel is open, which disconnects the observer.
+
+Storage: `autofill` in `chrome.storage.local` = `{ profile, opts }`, plaintext, never sync, never
+logged. The log entry for a fill records the kinds filled and the email/username used, not the
+password. `TabState.autofill` holds the last result (a `Slot`), never the profile; page-derived
+labels in it are capped and rendered as text.
+
 ## Panel <-> worker protocol
 
 Panel opens `chrome.runtime.connect({ name: 'sidepanel' })` and reconnects on
@@ -103,6 +154,7 @@ Request types (payload fields):
 | `scan/run` | `{}` | `{ added, rejected }` |
 | `wallet/add` | `{ input, chain: 'auto'\|code, xrpDestTag? }` | `{ wallet }` or ok:false (`error.code = 'invalid_address'`, `error.message` = reason) or `{ needsChain: true, options: [codes] }` |
 | `wallet/remove` | `{ walletId }` | `{}` |
+| `wallet/removeAll` | `{}` | `{ removed }` (all wallets are dismissed: automatic scans and page mutations do not re-add them, but a manual `scan/run` clears the dismissals and does) |
 | `wallet/setChain` | `{ walletId, chain }` | `{ wallet }` (EVM only; re-runs lookup if it had one) |
 | `wallet/select` | `{ walletId \| null, selected, all?: true }` | `{}` |
 | `wallet/setDestTag` | `{ walletId, tag }` | `{}` (tag must be digits, 0..4294967295) |
@@ -114,6 +166,12 @@ Request types (payload fields):
 | `rdap/lookup` | `{}` | RdapResult |
 | `urlscan/search` | `{}` | UrlscanSearchResult |
 | `urlscan/scan` | `{ url, visibility: 'public'\|'unlisted'\|'private' }` | `{}` (progress via state) |
+| `autofill/get` | `{}` | `{ profile, opts }` |
+| `autofill/save` | `{ profile?, opts? }` (partial) | `{ profile, opts }` or ok:false `invalid_profile` (`details` lists each problem) |
+| `autofill/reset` | `{}` | `{ profile, opts }` (profile back to defaults; options kept) |
+| `autofill/fill` | `{}` | AutofillResult (active tab, manual) |
+| `autofill/preview` | `{}` | AutofillResult with `dryRun: true`; nothing is changed |
+| `autofill/undo` | `{}` | `{ restored }` |
 | `settings/set` | `{ patch }` | `{ settings }` |
 | `keys/save` | `{ service, value }` | `{ keys }` or ok:false `invalid_format` |
 | `keys/clear` | `{ service }` | `{ keys }` |
@@ -142,6 +200,7 @@ TabState = {
   keywords: Slot<KeywordResult> & { highlighted: boolean },
   rdap: Slot<RdapResult>,
   urlscan: { search: Slot<UrlscanSearchResult>, scan: Slot<UrlscanScanResult> & { phase?: 'submitting'|'waiting'|'done', uuid? } },
+  autofill: Slot<AutofillResult>,       // absent on states persisted before this feature
 }
 
 Wallet = {
@@ -189,6 +248,13 @@ RdapResult = { domain, registrar, created: ISO|null, updated, expires, ageDays, 
 UrlscanSearchResult = { total, results: [ { uuid, time, url, ip, asn, asnname, country, server, screenshot, resultUrl, verdictScore?, malicious? } ] }
 UrlscanScanResult = { uuid, resultUrl, screenshot, verdict: { score, malicious, categories, brands }, page: { ip, asn, asnname, country, server, domain, url } }
 
+AutofillProfile = { username, email, password, phone, country, firstName, lastName, dob /* yyyy-mm-dd */,
+                    address, city, state, zip, depositAmount /* '100' */, custom: [{ label, value }] }   // defaults: username1202, example@example.com, Password1*, 2025550123, United States of America
+AutofillOpts    = { onLoad: true, domFallback: true, siteTagEmail: false, siteTagUsername: false, depositFill: true, highlight: true, checkTerms: false }
+AutofillResult  = { mode: 'url'|'dom'|'force', urlKind: 'signup'|'login'|'deposit'|null, deposit: bool, via: 'path'|'hash'|'query'|'subdomain'|null,
+                    detected: bool, dryRun: bool, terms: number, frames: number, at: ms,
+                    fields: [{ kind, label, status: 'filled'|'would-fill'|'manual'|'skipped', reason }] }   // label/reason are untrusted, capped
+
 Settings = { autoScan: false, autoOnchain: false, autoCheck: true, urlscanVisibility: 'unlisted' }
 KeysStatus = { [service]: { state: 'saved'|'not_set'|'invalid', masked?, savedAt?, ageDays?, warn? } }
 ```
@@ -202,4 +268,6 @@ KeysStatus = { [service]: { state: 'saved'|'not_set'|'invalid', masked?, savedAt
   `lib/net/queue.js` (session, or local for hour-long windows).
 - On-chain results are cached in `chrome.storage.session` for 10 min keyed by
   `onchain:<chain>:<normalized>`.
-- Recent submits (`recentSubmits`) and the log live in `chrome.storage.local`.
+- Recent submits (`recentSubmits`), the log and the autofill profile live in `chrome.storage.local`.
+- The autofill observer lives in the page, not the worker, and survives worker restarts; its
+  `autofill/retry` message wakes the worker.

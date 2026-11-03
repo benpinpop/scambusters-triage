@@ -111,7 +111,17 @@ function walletList(ctx) {
   return h('section', { class: 'card' },
     h('div', { class: 'card-head' }, h('h3', null, `Wallets (${ws.length})`),
       h('div', { class: 'card-actions' }, h('span', { class: 'muted' }, `${nSel} selected`),
-        btn('Select all', () => selAll(true), { class: 'tiny' }), btn('None', () => selAll(false), { class: 'tiny' }))),
+        btn('Select all', () => selAll(true), { class: 'tiny' }), btn('None', () => selAll(false), { class: 'tiny' }),
+        ctx.ui.confirmRemoveAll
+          ? h('span', { class: 'row' }, h('span', { class: 'small' }, `Remove all ${ws.length}?`),
+            btn('Yes, remove', async () => {
+              ctx.ui.confirmRemoveAll = false;
+              try { const d = await ctx.call('wallet/removeAll', {}); toast(`Removed ${d.removed} wallet(s)`); }
+              catch (e) { toast(e && e.message || 'Failed', 'err'); }
+              ctx.render();
+            }, { class: 'tiny danger' }),
+            btn('Cancel', () => { ctx.ui.confirmRemoveAll = false; ctx.render(); }, { class: 'tiny' }))
+          : btn('Remove all', () => { ctx.ui.confirmRemoveAll = true; ctx.render(); }, { class: 'tiny danger' }))),
     h('ul', { class: 'plain wallets' }, ws.map(w => row(ctx, w))));
 }
 

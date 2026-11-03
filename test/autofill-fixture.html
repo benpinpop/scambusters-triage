@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Autofill fixture</title></head>
+<body>
+  <!-- Sign-up form: every field type we handle, plus traps -->
+  <form id="signup" action="/never-submitted">
+    <label for="u">Choose a username</label><input id="u" name="user_name" type="text">
+    <label for="e">Email address</label><input id="e" name="contact" type="email">
+    <label for="e2">Confirm email</label><input id="e2" name="email_confirm" type="text">
+    <input id="pw" name="pw" type="password" placeholder="Password">
+    <input id="pw2" name="pw2" type="password" placeholder="Repeat password">
+    <input id="ph" name="phone" type="tel" placeholder="(555) 555-5555">
+    <input id="ph10" name="mobile" type="text" maxlength="10">
+    <select id="country" name="country">
+      <option value="">Select a country</option>
+      <option value="DE">Germany</option>
+      <option value="GB">United Kingdom</option>
+      <option value="US">United States</option>
+    </select>
+    <select id="dial" name="dialcode">
+      <option value="">Code</option>
+      <option value="+44">+44</option>
+      <option value="+1">+1</option>
+    </select>
+    <input id="fn" name="firstName" type="text">
+    <input id="ln" name="lastName" type="text">
+    <input id="dob" name="birthdate" type="date">
+    <input id="ref" name="referral_code" type="text">
+    <input id="captcha" name="captcha" type="text">
+    <input id="hp" name="website_hp" type="text" style="display:none">
+    <input id="hp2" name="address_2" type="text" style="visibility:hidden">
+    <input id="prefilled" name="nickname" type="text" value="keepme">
+    <input id="custom" name="sec_answer" type="text" placeholder="Security answer">
+    <label><input id="tos" type="checkbox" name="agree"> I agree to the Terms and Privacy Policy</label>
+    <label><input id="promo" type="checkbox" name="optin"> Send me marketing offers</label>
+    <button type="submit">Create account</button>
+  </form>
+
+  <!-- Footer newsletter box on the same page: must not be filled when a password form exists -->
+  <footer><input id="news" name="newsletter_email" type="email" placeholder="Subscribe to our newsletter"></footer>
+  <div id="after-footer"><input id="foot-plain" name="footer_email" type="email"></div>
+</body>
+</html>
