@@ -154,6 +154,7 @@ Request types (payload fields):
 | `scan/run` | `{}` | `{ added, rejected }` |
 | `wallet/add` | `{ input, chain: 'auto'\|code, xrpDestTag? }` | `{ wallet }` or ok:false (`error.code = 'invalid_address'`, `error.message` = reason) or `{ needsChain: true, options: [codes] }` |
 | `wallet/remove` | `{ walletId }` | `{}` |
+| `wallet/removeAll` | `{}` | `{ removed }` (all wallets are dismissed: automatic scans and page mutations do not re-add them, but a manual `scan/run` clears the dismissals and does) |
 | `wallet/setChain` | `{ walletId, chain }` | `{ wallet }` (EVM only; re-runs lookup if it had one) |
 | `wallet/select` | `{ walletId \| null, selected, all?: true }` | `{}` |
 | `wallet/setDestTag` | `{ walletId, tag }` | `{}` (tag must be digits, 0..4294967295) |

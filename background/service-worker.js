@@ -219,7 +219,9 @@ function accessError(e) {
   return null;
 }
 
-async function runScan(tabId) {
+// manual: the user pressed Re-scan. That forgets earlier removals so removed wallets come back;
+// automatic scans and mutation results still skip dismissed wallets.
+async function runScan(tabId, { manual = false } = {}) {
   const st0 = await getState(tabId);
   if (!st0 || st0.page.kind === 'restricted') return { added: 0, rejected: 0 };
   await mutate(tabId, s => { s.scan = { ...s.scan, status: 'loading', error: undefined }; });
@@ -234,6 +236,7 @@ async function runScan(tabId) {
     let added = 0, rej = 0;
     await mutate(tabId, s => {
       s.page = { kind: 'ok' };
+      if (manual) s.dismissed = [];
       for (const f of frames) { const r = ingest(s, f); added += r.added; rej += r.rejected; }
       s.scan = { status: 'done', at: Date.now(), frames: frames.length, durationMs: Date.now() - t0 };
     });
@@ -392,7 +395,7 @@ async function handle(port, type, p) {
     case 'scan/run': {
       const st = await requireState(port);
       if (st.page.kind === 'restricted') throw new ServiceError('restricted', st.page.reason);
-      return runScan(st.tabId);
+      return runScan(st.tabId, { manual: true });
     }
 
     case 'wallet/add': {
@@ -428,6 +431,18 @@ async function handle(port, type, p) {
         if (!s.dismissed.includes(p.walletId)) s.dismissed.push(p.walletId);
       });
       return {};
+    }
+
+    case 'wallet/removeAll': {
+      const st = await requireState(port);
+      let removed = 0;
+      await mutate(st.tabId, s => {
+        removed = s.wallets.length;
+        for (const w of s.wallets) if (!s.dismissed.includes(w.id)) s.dismissed.push(w.id);
+        s.wallets = [];
+        s.onchain = {};
+      });
+      return { removed };
     }
 
     case 'wallet/setChain': {

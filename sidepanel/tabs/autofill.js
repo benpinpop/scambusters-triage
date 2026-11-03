@@ -98,12 +98,22 @@ function profileCard(ctx) {
   const showPw = !!ui.open['show:afpw'];
   const busy = k => !!ui.pending['af:' + k];
 
+  // ctx.input records the value in ui.inputs but does not re-render, so the Save button's
+  // disabled state (derived from ui.inputs) would stay stale until something else re-rendered
+  // (e.g. toggling the extra fields). Re-render after each edit; renderNow keeps focus/caret.
+  const tracked = (key, props, tag) => {
+    const el = ctx.input(key, props, tag);
+    const ev = tag === 'select' || props.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(ev, () => ctx.render());
+    return el;
+  };
+
   const field = ([k, label, props = {}]) => {
     const isPw = k === 'password';
     return h('div', { class: 'setrow' },
       h('label', { class: 'lbl', for: 'in-af:' + k }, label),
       h('div', { class: 'row' },
-        ctx.input('af:' + k, { type: isPw ? (showPw ? 'text' : 'password') : (props.type || 'text'), class: 'input grow' + (isPw ? ' mono' : ''),
+        tracked('af:' + k, { type: isPw ? (showPw ? 'text' : 'password') : (props.type || 'text'), class: 'input grow' + (isPw ? ' mono' : ''),
           value: val(k), autocomplete: 'off', spellcheck: 'false', onkeydown: e => { if (e.key === 'Enter') save(); }, ...props }),
         isPw ? h('button', { type: 'button', class: 'btn tiny', 'aria-pressed': String(showPw), onclick: () => { ui.open['show:afpw'] = !showPw; ctx.render(); } }, showPw ? 'Hide' : 'Show') : null));
   };
@@ -131,7 +141,7 @@ function profileCard(ctx) {
         MORE_FIELDS.map(field),
         h('div', { class: 'setrow' },
           h('label', { class: 'lbl', for: 'in-af:custom' }, 'Custom fields'),
-          ctx.input('af:custom', { class: 'input mono', rows: '3', value: customVal, placeholder: 'referral = ABC123\nsecurity answer = blue', spellcheck: 'false' }, 'textarea'),
+          tracked('af:custom', { class: 'input mono', rows: '3', value: customVal, placeholder: 'referral = ABC123\nsecurity answer = blue', spellcheck: 'false' }, 'textarea'),
           h('div', { class: 'muted small' }, 'One per line as "label = value". Fills any field whose label, name or placeholder contains the label.'))) : null,
       h('div', { class: 'row wrapr' },
         btn(busy('save') ? 'Saving…' : 'Save profile', save, { class: 'tiny primary', disabled: busy('save') || !dirty }),
