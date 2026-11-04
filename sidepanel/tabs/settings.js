@@ -55,6 +55,8 @@ export function renderSettings(ctx) {
         }),
         toggle('Auto-run on-chain lookup when wallets are found', 'autoOnchain', 'Off by default: lookups use the free-tier rate limits of the explorer APIs.'),
         toggle('Auto-check ScamBusters status on open', 'autoCheck'),
+        toggle('Auto-run content keyword check on open', 'autoContent'),
+        toggle('Auto-run RDAP domain lookup', 'autoRdap', 'Once per domain; the result is cached and not repeated when the URL changes. Needs the panel open.'),
         h('div', { class: 'setrow' }, h('label', { class: 'lbl inline', for: 'in-set-vis' }, 'URLScan default visibility'),
           ctx.input('set-vis', { value: st.urlscanVisibility || 'unlisted', class: 'input mini2', onchange: e => set({ urlscanVisibility: e.target.value }) }, 'select',
             ['public', 'unlisted', 'private'].map(o => h('option', { value: o }, o)))),

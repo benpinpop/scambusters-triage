@@ -54,10 +54,10 @@ A valid key lets you **check** sites. To **submit**, your student account must b
 1. **Overview:** check the site in ScamBusters, look up domain age, search or run a URLScan.
 2. **Wallets:** review the detected wallets. Add missing ones by hand, remove false positives, and fix the chain on ambiguous `0x…` addresses.
 3. **On-chain:** look up balances, volume, first and last activity, and name labels. Red labels (scam, phishing, sanctioned) are flagged on Overview.
-4. **Content:** run the keyword check. The score is a triage aid, not a verdict.
+4. **Overview (Content card):** run the keyword check. The score is a triage aid, not a verdict.
 5. **Submit:** use the button at the bottom to send the site, with the selected wallets, to ScamBusters.
 6. **Autofill:** see "Autofill" below.
-7. **Log:** every check, submission and autofill, with IDs you can copy or export.
+7. **Log:** every check and submission, with IDs you can copy or export.
 
 ## Autofill
 
@@ -108,7 +108,7 @@ SOL addresses have no checksum, so they are marked **unverified**. EVM addresses
 ## Privacy and security
 
 - Scanning only reads the page, and page content never leaves your browser. Autofill is the one feature that writes to a page: it sets values in sign-up and login fields, and nothing else.
-- Your autofill profile goes only into a tab that matched a sign-up or login page. It is never sent to a server, never written to the log (the password is never logged), and never put into third-party iframes.
+- Your autofill profile goes only into a tab that matched a sign-up or login page. It is never sent to a server, never written to the log (autofill is not logged at all), and never put into third-party iframes.
 - Nothing is sent anywhere unless you click. The page URL goes to URLScan only when you click **Scan now** (unlisted by default). Wallet addresses go to block explorers only for lookups.
 - All page data is treated as hostile and rendered as plain text (no `innerHTML`).
 - Wallets are re-validated right before submit, so an invalid one can never be sent.

@@ -1,5 +1,6 @@
 import { walletLabels, h, spinner, errBox, kv, card, btn, badge, linkBtn, copyText, fmtLocal, fmtDate, retryUntil, countdown } from '../ui.js';
 import { CHECK_INFO, siteField, reportMarkdown } from '../helpers.js';
+import { contentCard } from './content.js';
 
 /** Merge a worker slot with locally-tracked call state. */
 export function slotView(ctx, key, slot) {
@@ -18,7 +19,7 @@ export function renderOverview(ctx) {
     flagged.flatMap(x => x.hi.map(l => `${l.text}${l.source ? ' (' + l.source + ')' : ''}`)).join(', ')) : null;
   return h('div', { class: 'stack' },
     flags,
-    checkCard(ctx), submitCard(ctx), rdapCard(ctx), urlscanCard(ctx),
+    checkCard(ctx), submitCard(ctx), rdapCard(ctx), contentCard(ctx), urlscanCard(ctx),
     h('div', { class: 'card pad' }, btn('Copy triage report (Markdown)', () => copyText(reportMarkdown(ctx), 'Report copied'), { class: 'wide' })));
 }
 

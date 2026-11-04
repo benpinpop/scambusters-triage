@@ -2,7 +2,8 @@ import { h, spinner, btn, badge, errBox, card, toast } from '../ui.js';
 import { slotView } from './overview.js';
 import { BAND_KIND } from '../helpers.js';
 
-export function renderContent(ctx) {
+/** Content keyword card, shown on the Overview tab. */
+export function contentCard(ctx) {
   const s = ctx.state;
   const v = slotView(ctx, 'keywords', s.keywords);
   const d = v.data;
@@ -21,7 +22,7 @@ export function renderContent(ctx) {
     d ? result(d) : (!v.loading && !v.error ? h('p', { class: 'muted' }, 'Run the check to score this page for scam language.') : null),
     h('p', { class: 'disclaimer' }, 'Heuristic aid for triage, not a verdict. A high score does not prove a scam and a low score does not clear a site.'),
   ];
-  return h('div', { class: 'stack' }, card('Content keywords', body));
+  return card('Content keywords', body);
 }
 
 function result(d) {

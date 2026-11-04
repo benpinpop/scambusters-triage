@@ -20,6 +20,8 @@ export const DEFAULT_SETTINGS = {
   autoScan: false,
   autoOnchain: false,
   autoCheck: true,
+  autoRdap: false,
+  autoContent: false,
   urlscanVisibility: 'unlisted',
   allSites: false,
 };
@@ -34,7 +36,7 @@ export async function getSettings() {
 export async function setSettings(patch) {
   const cur = await getSettings();
   const next = { ...cur };
-  for (const k of ['autoScan', 'autoOnchain', 'autoCheck', 'allSites']) if (k in patch) next[k] = !!patch[k];
+  for (const k of ['autoScan', 'autoOnchain', 'autoCheck', 'autoRdap', 'autoContent', 'allSites']) if (k in patch) next[k] = !!patch[k];
   if ('urlscanVisibility' in patch && ['public', 'unlisted', 'private'].includes(patch.urlscanVisibility)) {
     next.urlscanVisibility = patch.urlscanVisibility;
   }

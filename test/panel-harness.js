@@ -54,7 +54,7 @@ function makeState() {
 function makeState2() { return fullState(); }
 
 let state = makeState();
-let settings = { autoScan: false, autoOnchain: false, autoCheck: true, urlscanVisibility: 'unlisted', allSites: false };
+let settings = { autoScan: false, autoOnchain: false, autoCheck: true, autoRdap: false, autoContent: false, urlscanVisibility: 'unlisted', allSites: false };
 let keys = {
   scambusters: { state: 'saved', masked: 'sb_…1a2b', savedAt: now - 26 * 864e5, ageDays: 26, warn: true },
   urlscan: { state: 'saved', masked: '1234…cdef', ageDays: 3 },

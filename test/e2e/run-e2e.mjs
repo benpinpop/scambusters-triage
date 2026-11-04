@@ -254,7 +254,7 @@ try {
   await ui.goto(`chrome-extension://${extId}/sidepanel/panel.html`);
   await fixture.bringToFront();
   await new Promise(r => setTimeout(r, 2000));
-  for (const tab of ['Overview', 'Wallets', 'On-chain', 'Content', 'Log', 'Settings']) {
+  for (const tab of ['Overview', 'Wallets', 'On-chain', 'Log', 'Settings']) {
     await ui.evaluate(name => { const b = [...document.querySelectorAll('[role=tab]')].find(x => x.textContent.trim().startsWith(name)); if (b) b.click(); }, tab);
     await new Promise(r => setTimeout(r, 600));
     await ui.screenshot({ path: path.join(OUT, `${tab}.png`), fullPage: true }).catch(e => console.log('screenshot failed', tab, e.message));

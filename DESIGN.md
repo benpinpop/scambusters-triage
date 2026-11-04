@@ -129,8 +129,8 @@ sends `{ type: 'autofill/retry' }` (debounced, at most one per 3 s). The worker 
 `{ stop: true }` when no panel is open, which disconnects the observer.
 
 Storage: `autofill` in `chrome.storage.local` = `{ profile, opts }`, plaintext, never sync, never
-logged. The log entry for a fill records the kinds filled and the email/username used, not the
-password. `TabState.autofill` holds the last result (a `Slot`), never the profile; page-derived
+logged. Autofill passes are not written to the activity log (only checks and submissions are).
+`TabState.autofill` holds the last result (a `Slot`), never the profile; page-derived
 labels in it are capped and rendered as text.
 
 ## Panel <-> worker protocol
@@ -255,7 +255,7 @@ AutofillResult  = { mode: 'url'|'dom'|'force', urlKind: 'signup'|'login'|'deposi
                     detected: bool, dryRun: bool, terms: number, frames: number, at: ms,
                     fields: [{ kind, label, status: 'filled'|'would-fill'|'manual'|'skipped', reason }] }   // label/reason are untrusted, capped
 
-Settings = { autoScan: false, autoOnchain: false, autoCheck: true, urlscanVisibility: 'unlisted' }
+Settings = { autoScan: false, autoOnchain: false, autoCheck: true, autoContent: false /* keyword check when the panel opens */, autoRdap: false /* auto RDAP once per domain, cached, panel must be open, never logged */, urlscanVisibility: 'unlisted' }
 KeysStatus = { [service]: { state: 'saved'|'not_set'|'invalid', masked?, savedAt?, ageDays?, warn? } }
 ```
 

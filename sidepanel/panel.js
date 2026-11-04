@@ -6,7 +6,6 @@ import { openSubmitSheet } from './sheet.js';
 import { renderOverview, slotView } from './tabs/overview.js';
 import { renderWallets } from './tabs/wallets.js';
 import { renderOnchain } from './tabs/onchain.js';
-import { renderContent } from './tabs/content.js';
 import { renderAutofill, loadAutofill } from './tabs/autofill.js';
 import { renderLog } from './tabs/log.js';
 import { renderSettings, allowAllSites, refreshAllSites } from './tabs/settings.js';
@@ -15,12 +14,11 @@ const TABS = [
   ['overview', 'Overview', renderOverview],
   ['wallets', 'Wallets', renderWallets],
   ['onchain', 'On-chain', renderOnchain],
-  ['content', 'Content', renderContent],
   ['autofill', 'Autofill', renderAutofill],
   ['log', 'Log', renderLog],
   ['settings', 'Settings', renderSettings],
 ];
-const NEEDS_PAGE = new Set(['overview', 'wallets', 'onchain', 'content']);
+const NEEDS_PAGE = new Set(['overview', 'wallets', 'onchain']);
 const FOOTER_TABS = new Set(['overview', 'wallets']);
 
 const ui = {

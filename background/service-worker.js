@@ -152,7 +152,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
           // and the per-domain RDAP / ScamBusters check results.
           fresh.wallets = old.wallets;
           fresh.dismissed = old.dismissed;
-          if (old.rdap.status === 'done') fresh.rdap = old.rdap;
+          if (old.rdap.status === 'done' || old.rdap.status === 'error') fresh.rdap = old.rdap; // an error is not auto-retried on every page
           if (old.check.status === 'done') fresh.check = old.check;
           fresh.domainLoaded = true;
         } else {
@@ -189,7 +189,21 @@ async function maybeAutoRun(tabId, { onLoad = false, onOpen = false, onSwitch = 
     const keys = await getKeys();
     if (keys.scambusters) runCheck(tabId, st.origin).catch(() => {});
   }
+  // Content keyword check: only when the panel is opened, never on page load or tab switch.
+  if (onOpen && !onSwitch && s.autoContent && st.keywords.status === 'idle') runKeywords(tabId).catch(() => {});
+  // RDAP is per domain and cached (see state.js), so this only fires for a domain with no result
+  // yet. It needs an open panel so browsing with the panel closed never leaks hostnames to rdap.org.
+  if (s.autoRdap && st.hostname && st.rdap.status === 'idle' && !rdapInflight.has(domainOf(st.hostname))) {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (tab && hasPanel(tab.windowId)) {
+      const dom = domainOf(st.hostname);
+      rdapInflight.add(dom);
+      slotRun(tabId, x => x.rdap, (x, v) => { x.rdap = v; }, () => rdapLookup(st.hostname))
+        .catch(() => {}).finally(() => rdapInflight.delete(dom));
+    }
+  }
 }
+const rdapInflight = new Set();
 
 function updateBadge(tabId, st) {
   const n = st.wallets.length;
@@ -690,11 +704,6 @@ async function runAutofill(tabId, { manual = false, dryRun = false } = {}) {
   const keep = !manual && !filledKinds.length && cur && cur.autofill && cur.autofill.status === 'done' && !cur.autofill.data.dryRun;
   if (!keep && (manual || fields.length || data.detected || match)) {
     await mutate(tabId, s => { s.autofill = { status: 'done', data, at: data.at }; });
-  }
-  if (filledKinds.length && !dryRun) {
-    let siteUrl = url;
-    try { const u = new URL(url); siteUrl = u.origin + u.pathname; } catch { /* keep */ }
-    addLog({ type: 'autofill', status: 'filled', siteUrl, fields: filledKinds, ...(used.email ? { email: used.email } : {}), ...(used.username ? { username: used.username } : {}), ...(terms ? { terms } : {}) });
   }
   return data;
 }
